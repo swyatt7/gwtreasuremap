@@ -39,11 +39,11 @@
 </head>
 <body>
   <ul class="nav nav-tabs">
-    {% for a_type in form.alert_types if a_type != "Retraction" %}
-      {% if a_type == form.alert_type %}
-        <li class="active"><a href="/{{ form.page }}?graceids={{ form.graceid }}&pointing_status={{ form.status }}&alert_type={{ a_type }}">{{ a_type }}</a></li>
+    {% for al in form.alert_type_tabs if al['type']!= "Retraction" %}
+      {% if al['type'] == form.alert_type %}
+        <li class="active"><a href="/{{ form.page }}?graceids={{ form.graceid }}&pointing_status={{ form.status }}&alert_type={{ al['type'] }}">{{ al['type'] }} <br> {{al['timesent']}}</a></li>
       {% else %}
-        <li><a href="/{{ form.page }}?graceids={{ form.graceid }}&pointing_status={{ form.status }}&alert_type={{ a_type }}">{{ a_type }}</a></li>
+        <li><a href="/{{ form.page }}?graceids={{ form.graceid }}&pointing_status={{ form.status }}&alert_type={{ al['type'] }}">{{ al['type'] }}<br>{{al['timesent']}}</a></li>
       {% endif %}
     {% endfor %}
   </ul>
@@ -96,6 +96,10 @@
             <tr class="info">
               <td>Time of Signal</td>
               <td>{{ form.selected_alert_info.time_of_signal }} UTC</td>
+            </tr>
+            <tr class="info">
+              <td>Time Sent</td>
+              <td>{{ form.selected_alert_info.timesent }} UTC</td>
             </tr>
             <tr class="info">
               <td>False Alarm Rate</td>

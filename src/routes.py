@@ -1283,14 +1283,20 @@ def construct_alertform(form, args):
 		#Also involves logic to handle multiple alert types that are the same
 		#Update, Update 1, Update 2...
 		alert_types = [x.alert_type for x in alert_info]
-		form.alert_types = []
-		for at in alert_types:
-			if at in form.alert_types:
-				num = len([x for x in form.alert_types if at in x])
-				form.alert_types.append(at + ' ' + str(num))
+		form.alert_type_tabs = []
+		for at in alert_info:
+			print(at.alert_type)
+			if at.alert_type in form.alert_types:
+				num = len([x for x in form.alert_types if at.alert_type in x])
+				form.alert_type_tabs.append({
+					'type': at.alert_type + ' ' + str(num),
+					'timesent':at.timesent
+				})
 			else:
-				form.alert_types.append(at)
-
+				form.alert_type_tabs.append({
+					'type': at.alert_type,
+					'timesent':at.timesent
+				})
 
 		#user selected an alert type?
 		if alerttype is not None and alerttype != 'None':
@@ -1530,7 +1536,8 @@ def construct_alertform(form, args):
 			form.step = (form.maxtime*100 - form.mintime*100)/100000
 
 		galLists = db.session.query(models.gw_galaxy_list).filter(
-			models.gw_galaxy_list.graceid == graceid
+			models.gw_galaxy_list.graceid == graceid,
+			models.gw_galaxy_list.alertid == form.selected_alert_info.id,
 		).all()
 		galList_ids = list(set([x.id for x in galLists]))
 
@@ -1554,7 +1561,7 @@ def construct_alertform(form, args):
 					"name":e.name,
 					"ra": ra,
 					"dec": dec,
-					"info":function.sanatize_gal_info(ra, dec, e.score, e.rank, glist.reference, e.info)
+					"info":function.sanatize_gal_info(e, glist)
 				})
 			galaxy_cats.append({
 				"name":glist.groupname,
@@ -1716,17 +1723,13 @@ def send_password_reset_email(user):
 				<p>The Treasure Map Team</p>"
 	)
 
-def create_doi(points, graceid, creators, insts):
+def create_pointing_doi(points, graceid, creators, insts):
 
 	graceid = alternatefromgraceid(graceid)
-
-	ACCESS_TOKEN = app.config['ZENODO_ACCESS_KEY']
 	points_json = []
-
 
 	for p in points:
 		if p.status == models.pointing_status.completed:
-			#p.doi_id = d_id
 			points_json.append(p.json)
 
 	if len(insts) > 1:
@@ -1742,28 +1745,71 @@ def create_doi(points, graceid, creators, insts):
 		inst_str = "These observations were taken on the " + insts[0] + " instrument."
 
 	if len(points_json):
-		data = {
-			"metadata": {
-				"title":"Submitted Completed pointings to the Gravitational Wave Treasure Map for event " + graceid,
-				"upload_type":"dataset",
-				"creators":creators,
-				"description":"Attached in a .json file is the completed pointing information for "+str(len(points_json))+" observation(s) for the EM counterpart search associated with the gravitational wave event " + graceid +". " + inst_str
-			}
+
+		payload = {
+			'data' : {
+				"metadata": {
+					"title":"Submitted Completed pointings to the Gravitational Wave Treasure Map for event " + graceid,
+					"upload_type":"dataset",
+					"creators":creators,
+					"description":"Attached in a .json file is the completed pointing information for "+str(len(points_json))+" observation(s) for the EM counterpart search associated with the gravitational wave event " + graceid +". " + inst_str
+				}
+			},
+			'data_file' : { 'name':'completed_pointings_'+graceid+'.json' },
+			'files' : { 'file':io.StringIO(json.dumps(points_json)) },
+			'headers' : { "Content-Type": "application/json" },
 		}
 
-		data_file = { 'name':'completed_pointings_'+graceid+'.json' }
-		files = { 'file':io.StringIO(json.dumps(points_json)) }
-		headers = { "Content-Type": "application/json" }
-
-		r = requests.post('https://zenodo.org/api/deposit/depositions', params={'access_token': ACCESS_TOKEN}, json={}, headers=headers)
-		d_id = r.json()['id']
-		r = requests.post('https://zenodo.org/api/deposit/depositions/%s/files' % d_id, params={'access_token': ACCESS_TOKEN}, data=data_file, files=files)
-		r = requests.put('https://zenodo.org/api/deposit/depositions/%s' % d_id, data=json.dumps(data), params={'access_token': ACCESS_TOKEN}, headers=headers)
-		r = requests.post('https://zenodo.org/api/deposit/depositions/%s/actions/publish' % d_id, params={'access_token': ACCESS_TOKEN})
-		return_json = r.json()
-		return int(d_id), return_json['doi_url']
+		d_id, url = create_doi(payload)
+		return d_id, url
 
 	return None, None
+
+
+def create_galaxy_score_doi(galaxies, creators, reference, graceid, alert_type):
+
+	ref_str = '' if reference is None else "A reference to these calculations can be found here: {}".format(reference)
+
+	gal_json = []
+
+	for g in galaxies:
+		print('waahwahh', g)
+		gal_json.append(g.json)
+
+	payload = {
+		'data' : {
+			"metadata": {
+				"title":"Submitted Galaxy Scores to the Gravitational Wave Treasure Map for event {} {}".format(graceid, alert_type),
+				"upload_type":"dataset",
+				"creators":creators,
+				"description":"Attached in a .json file is the ranked galaxy information within the contour region of the EM counterpart search associated with the gravitational wave event " + graceid +" "+alert_type+". "+ref_str
+			}
+		},
+		'data_file' : { 'name':'completed_pointings_'+graceid+'.json' },
+		'files' : { 'file':io.StringIO(json.dumps(gal_json)) },
+		'headers' : { "Content-Type": "application/json" },
+	}
+
+	d_id, url = create_doi(payload)
+	return d_id, url
+
+def create_doi(payload):
+
+	ACCESS_TOKEN = app.config['ZENODO_ACCESS_KEY']
+	data = payload['data']
+	data_file = payload['data_file']
+	files = payload['files']
+	headers = payload['headers']
+
+	r = requests.post('https://zenodo.org/api/deposit/depositions', params={'access_token': ACCESS_TOKEN}, json={}, headers=headers)
+	d_id = r.json()['id']
+	r = requests.post('https://zenodo.org/api/deposit/depositions/%s/files' % d_id, params={'access_token': ACCESS_TOKEN}, data=data_file, files=files)
+	r = requests.put('https://zenodo.org/api/deposit/depositions/%s' % d_id, data=json.dumps(data), params={'access_token': ACCESS_TOKEN}, headers=headers)
+	r = requests.post('https://zenodo.org/api/deposit/depositions/%s/actions/publish' % d_id, params={'access_token': ACCESS_TOKEN})
+
+	return_json = r.json()
+	return int(d_id), return_json['doi_url']
+
 
 #API Endpoints
 
@@ -1800,7 +1846,42 @@ def get_footprints():
 
 @app.route('/api/v0/remove_event_galaxies', methods=['Post'])
 def remove_event_galaxies():
-	pass
+	try:
+		args = request.get_json()
+	except:
+		return("Whoaaaa that JSON is a little wonky")
+
+	if args is None:
+		args = request.args
+	
+	if args is None:
+		return("Invalid Arguments.")
+	
+	if "api_token" in args:
+		apitoken = args['api_token']
+		user = db.session.query(models.users).filter(models.users.api_token ==  apitoken).first()
+		if user is None:
+			return jsonify("invalid api_token")
+	else:
+		return jsonify("api_token is required")
+
+	if "listid" in args:
+		listid = args['listid']
+		if function.isInt(listid):
+			gallist = db.session.query(models.gw_galaxy_list).filter(models.gw_galaxy_list.id==listid).first()
+			if user.id == gallist.submitterid:
+				gallist_entries = db.session.query(models.gw_galaxy_entry).filter(models.gw_galaxy_entry.listid == listid)
+				db.session.delete(gallist)
+				for ge in gallist_entries:
+					db.session.delete(ge)
+				db.session.commit()
+				return("Successfully deleted your galaxy list")
+			else:
+				return jsonify('you can only delete information related to your api_token! shame shame')
+		else:
+			return jsonify('Invalid listid')
+	else:
+		return jsonify('Event galaxy listid is required')
 
 @app.route('/api/v0/event_galaxies', methods=['GET'])
 def get_event_galaxies():
@@ -1830,6 +1911,23 @@ def get_event_galaxies():
 		filter.append(models.gw_galaxy_list.graceid == graceid)
 	else:
 		return("\'graceid\' is required")
+
+	if "timesent_stamp" in args:
+		timesent_stamp = args['timesent_stamp']
+		try:
+			time = datetime.datetime.strptime(timesent_stamp, "%Y-%m-%dT%H:%M:%S.%f")
+		except:
+			return jsonify("Error parsing date. Should be %Y-%m-%dT%H:%M:%S.%f format. e.g. 2019-05-01T12:00:00.00")
+
+		alert = db.session.query(models.gw_alert).filter(
+			models.gw_alert.timesent < time + datetime.timedelta(seconds=15), 
+			models.gw_alert.timesent > time - datetime.timedelta(seconds=15),
+			models.gw_alert.graceid == graceid).first()
+		if alert is None:
+			return jsonify('Invalid \'timesent_stamp\' for event\n Please visit http://treasuremap.space/alerts?graceids={} for valid timesent stamps for this event'.format(graceid))
+		else:
+			filter.append(models.gw_galaxy_list.alertid == alert.id)
+
 	if 'groupname' in args:
 		filter.append(models.gw_galaxy_list.groupname == args['groupname'])
 	if 'score_gt' in args:
@@ -1855,13 +1953,7 @@ def post_event_galaxies():
 	except:
 		return("Whoaaaa that JSON is a little wonky")
 
-	#How do we want to really do this.
-	#I think having separate galaxy catalogs ingested isn't the best idea
-	#Why don't we just ingest:
-	#	EventGalaxyList
-	#		Name,RA,DEC,KWARGS (10000 characters long)
-
-
+	post_doi = False
 	warnings = []
 	errors = []
 
@@ -1879,20 +1971,51 @@ def post_event_galaxies():
 	else:
 		return jsonify('graceid is required')
 
+	if "timesent_stamp" in args:
+		timesent_stamp = args['timesent_stamp']
+		try:
+			time = datetime.datetime.strptime(timesent_stamp, "%Y-%m-%dT%H:%M:%S.%f")
+		except:
+			return jsonify("Error parsing date. Should be %Y-%m-%dT%H:%M:%S.%f format. e.g. 2019-05-01T12:00:00.00")
+
+		alert = db.session.query(models.gw_alert).filter(
+			models.gw_alert.timesent < time + datetime.timedelta(seconds=15), 
+			models.gw_alert.timesent > time - datetime.timedelta(seconds=15),
+			models.gw_alert.graceid == graceid).first()
+		if alert is None:
+			return jsonify('Invalid \'timesent_stamp\' for event\n Please visit http://treasuremap.space/alerts?graceids={} for valid timesent stamps for this event'.format(graceid))
+	else:
+		return jsonify('timesent_stamp is required')
+
 	if "groupname" in args:
 		groupname = args['groupname']
 	else:
 		groupname = user.username
 		warnings.append("no groupname given. Defaulting to api_token username")
 
-	reference = ""
+	reference = None
 	if "reference" in args:
 		reference = args['reference']
+
+	if 'request_doi' in args:
+		post_doi = bool(args['request_doi'])
+		if 'creators' in args:
+			creators = args['creators']
+			for c in creators:
+				if 'name' not in c.keys() or 'affiliation' not in c.keys():
+					return jsonify('name and affiliation are required for DOI creators json list')
+		elif 'doi_group_id' in args:
+				valid, creators = construct_creators(args['doi_group_id'], userid)
+				if not valid:
+					return jsonify("Invalid doi_group_id. Make sure you are the User associated with the DOI group")
+		else:
+			creators = [{ 'name':str(user.firstname) + ' ' + str(user.lastname) }]
 
 	#maybe include the possibility for a different delimiter for alert types as well. Not only graceids
 	gw_galist = models.gw_galaxy_list(
 		submitterid = user.id,
 		graceid = graceid,
+		alertid = alert.id,
 		groupname = groupname,
 		reference = reference,
 	)
@@ -1919,15 +2042,32 @@ def post_event_galaxies():
 	else:
 		return jsonify("a list of galaxies is required")
 
+	doi_string = '. '
+
 	db.session.flush()
 	db.session.commit()
 
-	return jsonify({"Successful adding of "+str(len(valid_galaxies))+" galaxies for event "+graceid+". List ID":str(gw_galist.id), "ERRORS":errors, "WARNINGS":warnings})
+	if post_doi:
+		doi_id, url = create_galaxy_score_doi(valid_galaxies, creators, reference, graceid, alert.alert_type)
+		gw_galist.doi_id = doi_id
+		gw_galist.doi_url = url
+		doi_string = ". DOI url: {}.".format(url)
+
+		db.session.flush()
+		db.session.commit()
+
+	return jsonify({"Successful adding of "+str(len(valid_galaxies))+" galaxies for event "+graceid+doi_string+" List ID" :str(gw_galist.id), 
+					"ERRORS":errors, 
+					"WARNINGS":warnings})
 
 #Get Galaxies From glade_2p3
 @app.route("/api/v0/glade", methods=['GET'])
 def get_galaxies():
-	args = request.args
+	try:
+		args = request.get_json()
+	except:
+		return("Whoaaaa that JSON is a little wonky")
+
 
 	if "api_token" in args:
 		apitoken = args['api_token']
@@ -1939,9 +2079,9 @@ def get_galaxies():
 
 	filter = []
 	filter1 = []
-	#filter1.append(models.glade_2p3.pgc_number != -1)
-	#filter1.append(models.glade_2p3.distance > 0)
-	#filter1.append(models.glade_2p3.distance < 100)
+	filter1.append(models.glade_2p3.pgc_number != -1)
+	filter1.append(models.glade_2p3.distance > 0)
+	filter1.append(models.glade_2p3.distance < 100)
 	trim = db.session.query(models.glade_2p3).filter(*filter1)
 
 	orderby = []
@@ -2090,7 +2230,7 @@ def add_pointings():
 		if 'doi_url' in rd:
 			doi_id, doi_url = 0, rd['doi_url']
 		else:
-			doi_id, doi_url = create_doi(points, gid, creators, inst_set)
+			doi_id, doi_url = create_pointing_doi(points, gid, creators, inst_set)
 
 		if doi_id is not None:
 			for p in points:

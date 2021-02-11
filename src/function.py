@@ -140,15 +140,18 @@ def sanatize_XRT_source_info(info):
     ret += "<b> Identifier: </b>"+str(info['alert_identifier'])+"<br></p>"
     return ret
 
-def sanatize_gal_info(ra, dec, score, rank, ref, g):
+def sanatize_gal_info(entry, glist):
+    ra, dec = sanatize_pointing(entry.position)
     ret = "<p>"
-    ret = "<b>Score: </b>"+str(score)+"<br>"
-    ret += "<b>Rank: </b>"+str(rank)+"<br>" 
-    if ref:
-        ret+= "<b>Reference: </b>"+ref+"<br>"
-    ret += "<b> RA, DEC: </b>"+str(round(ra,4))+" "+str(round(dec,4))+"<br></p><b>Other Information:</b><br><p>"
-    for key in g.keys():
-        ret += "<b>"+str(key)+":</b> "+str(g[key].split('\n')[0])+"<br>"
+    ret = "<b>Score: </b>"+str(entry.score)+"<br>"
+    ret += "<b>Rank: </b>"+str(entry.rank)+"<br>" 
+    if glist.reference:
+        ret+= "<b>Reference: </b>"+glist.reference+"<br>"
+    if glist.doi_url:
+        ret+= "<b>DOI: </b><a href="+glist.doi_url+">"+glist.doi_url+"</a><br>"
+    ret += "<b> RA DEC: </b>"+str(round(ra,4))+" "+str(round(dec,4))+"<br></p><b>Other Information:</b><br><p>"
+    for key in entry.info.keys():
+        ret += "<b>"+str(key)+":</b> "+str(entry.info[key].split('\n')[0])+"<br>"
     ret += "</p>"
     return ret
 

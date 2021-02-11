@@ -674,6 +674,9 @@ class gw_galaxy_list(db.Model):
     groupname = db.Column(db.String)
     submitterid = db.Column(db.Integer)
     reference = db.Column(db.String)
+    alertid = db.Column(db.String)
+    doi_url = db.Column(db.String(100))
+    doi_id = db.Column(db.Integer)
 
     @property
     def json(self):
