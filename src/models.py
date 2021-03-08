@@ -703,7 +703,7 @@ class gw_galaxy_entry(db.Model):
             if "POINT" in pos:
                 self.position = p['position']
             else:
-                v.errors.append("Invalid position argument. Must be decimal format ra/RA, dec/DEC, or geometry type \"POINT(RA, DEC)\"")
+                v.errors.append("Invalid position argument. Must be decimal format ra/RA, dec/DEC, or geometry type \"POINT(RA DEC)\"")
         else:
             if 'ra' in p or 'RA' in p:
                 ra = p['ra'] if 'ra' in p else p['RA']

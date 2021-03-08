@@ -151,7 +151,7 @@ def sanatize_gal_info(entry, glist):
         ret+= "<b>DOI: </b><a href="+glist.doi_url+">"+glist.doi_url+"</a><br>"
     ret += "<b> RA DEC: </b>"+str(round(ra,4))+" "+str(round(dec,4))+"<br></p><b>Other Information:</b><br><p>"
     for key in entry.info.keys():
-        ret += "<b>"+str(key)+":</b> "+str(entry.info[key].split('\n')[0])+"<br>"
+        ret += "<b>"+str(key)+":</b> "+str(entry.info[key]).split('\n')[0]+"<br>"
     ret += "</p>"
     return ret
 
