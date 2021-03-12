@@ -208,8 +208,6 @@ class AlertsForm(FlaskForm):
     def construct_alertform(self, args):
 
         graceid = args['graceid']
-        status = args['pointing_status']
-        alerttype = args['alert_type']
 
         detection_overlays = None
         inst_overlays = None
@@ -258,6 +256,7 @@ class AlertsForm(FlaskForm):
         #if there is a selected graceid
         if graceid != 'None' and graceid is not None:
 
+            t_start = time.time()
             #preserve the forms graceid
             self.graceid = graceid
 
@@ -288,34 +287,26 @@ class AlertsForm(FlaskForm):
                     num = len([x for x in typetabs if at.alert_type in x])
                     self.alert_type_tabs.append({
                         'type': at.alert_type + ' ' + str(num),
-                        'timesent':at.timesent
+                        'timesent':at.timesent,
+                        'urlid':'{}_{}_{}'.format(at.id, at.alert_type, str(num))
                     })
                 else:
                     self.alert_type_tabs.append({
                         'type': at.alert_type,
-                        'timesent':at.timesent
+                        'timesent':at.timesent,
+                        'urlid':'{}_{}'.format(at.id, at.alert_type)
                     })
 
-            #user selected an alert type?
-            if alerttype is not None and alerttype != 'None':
-                at = alerttype.split()[0]
-                if len(alerttype.split()) > 1:
-                    itera = int(alerttype.split()[1])
-                else:
-                    itera = 0
-                self.selected_alert_info = [x for x in alert_info if x.alert_type == at][itera]
-                self.alert_type = alerttype
-            #user did not select an alert type, so get the most recent one, except not a Retraction type!!
+            cleaned_alert_info = [alert for alert in alert_info if alert.alert_type != 'Retraction']
+            if len(cleaned_alert_info):
+                pre_alert = cleaned_alert_info[len(cleaned_alert_info)-1]
             else:
-                cleaned_alert_info = [alert for alert in alert_info if alert.alert_type != 'Retraction']
-                if len(cleaned_alert_info):
-                    pre_alert = cleaned_alert_info[len(cleaned_alert_info)-1]
-                else:
-                    pre_alert = alert_info[0]
-                num = len([x for x in alert_types if x == pre_alert.alert_type])-1
-                self.selected_alert_info = pre_alert
-                #make sure to get the correct alert attribute even if it has a number appended to it.. Update, vs Update 1, Update 2...
-                self.alert_type = pre_alert.alert_type if num < 1 else pre_alert.alert_type + ' ' + str(num)
+                pre_alert = alert_info[0]
+            num = len([x for x in alert_types if x == pre_alert.alert_type])-1
+            self.selected_alert_info = pre_alert
+
+            #make sure to get the correct alert attribute even if it has a number appended to it.. Update, vs Update 1, Update 2...
+            self.alert_type = pre_alert.alert_type if num < 1 else pre_alert.alert_type + ' ' + str(num)
 
             if self.selected_alert_info.far != 0:
                 farrate = 1/self.selected_alert_info.far
@@ -353,22 +344,13 @@ class AlertsForm(FlaskForm):
             pointing_filter = []
             pointing_filter.append(models.pointing_event.graceid == graceid)
             pointing_filter.append(models.pointing_event.pointingid == models.pointing.id)
-
-            if status == 'pandc':
-                ors = []
-                ors.append(models.pointing.status == enums.pointing_status.completed)
-                ors.append(models.pointing.status == enums.pointing_status.planned)
-                pointing_filter.append(fsq.sqlalchemy.or_(*ors))
-                self.status = 'pandc'
-            elif (status is not None and status != 'all' and status != ''):
-                pointing_filter.append(models.pointing.status == status)
-                self.status = status
+            pointing_filter.append(models.pointing.status == enums.pointing_status.completed)
 
             pointing_info = db.session.query(
                 models.pointing.instrumentid,
-                models.pointing.pos_angle,
+                #models.pointing.pos_angle,
                 models.pointing.time,
-                func.ST_AsText(models.pointing.position).label('position'),
+                #func.ST_AsText(models.pointing.position).label('position'),
                 models.pointing.band,
                 models.pointing.depth,
                 models.pointing.depth_unit,
@@ -399,18 +381,8 @@ class AlertsForm(FlaskForm):
             for dp in list(set([x.depth_unit for x in pointing_info if x.status == enums.pointing_status.completed and x.instrumentid != 49 and x.depth_unit != None])):
                 self.depth_unit.append({'name':str(dp), 'value':dp.name})
 
-            #filter and query the relevant instrument footprints
-            footprintinfo = db.session.query(
-                func.ST_AsText(models.footprint_ccd.footprint).label('footprint'),
-                models.footprint_ccd.instrumentid
-            ).filter(
-                models.footprint_ccd.instrumentid.in_(instrumentids)
-            ).all()
-
             detection_overlays = []
-            inst_overlays = []
             GRBoverlays = []
-            galaxy_cats = []
 
             if self.selected_alert_info.time_of_signal:
                 tos = self.selected_alert_info.time_of_signal
@@ -419,37 +391,19 @@ class AlertsForm(FlaskForm):
             else:
                 self.tos_mjd = 0
 
+            if len(pointing_info):
+                times = []
+                for p in pointing_info:
+                    t = astropy.time.Time([p.time])
+                    times.append(round(t.mjd[0]-self.tos_mjd, 2))
+
+                self.mintime = min(times)
+                self.maxtime = max(times)
+                self.step = (self.maxtime*100 - self.mintime*100)/100000
+
             #iterate over each instrument and grab their pointings
             #rotate and project the footprint and then add it to the overlay list
-            colorlist=['#ffe119', '#4363d8', '#f58231', '#42d4f4', '#f032e6', '#fabebe', '#469990', '#e6beff', '#9A6324', '#fffac8', '#800000', '#aaffc3', '#000075', '#a9a9a9']
-
-            #if 'Retraction' not in form.alert_type:
-            for i,inst in enumerate([x for x in instrumentinfo if x.id != 49]):
-                name = inst.nickname if inst.nickname and inst.nickname != 'None' else inst.instrument_name
-                try:
-                    color = colorlist[i]
-                except:
-                    color = colors[inst.id]
-                    pass
-                footprint_ccds = [x.footprint for x in footprintinfo if x.instrumentid == inst.id]
-                sanatized_ccds = function.sanatize_footprint_ccds(footprint_ccds)
-                inst_pointings = [x for x in pointing_info if x.instrumentid == inst.id]
-                pointing_geometries = []
-
-                for p in inst_pointings:
-                    t = astropy.time.Time([p.time])
-                    ra, dec = function.sanatize_pointing(p.position)
-                    for ccd in sanatized_ccds:
-                        pointing_footprint = function.project_footprint(ccd, ra, dec, p.pos_angle)
-                        pointing_geometries.append({"polygon":pointing_footprint, "time":round(t.mjd[0]-self.tos_mjd, 2)})
-
-                inst_overlays.append({
-                    "display":True,
-                    "name":name,
-                    "color":color,
-                    "contours":pointing_geometries
-                })
-
+            
             #do BAT stuff
             #BAT instrumentid == 49
             # If there are any pointings with BAT. Find the file
@@ -522,47 +476,39 @@ class AlertsForm(FlaskForm):
                     "contours":function.polygons2footprints(contour_geometry, 0)
                 })
 
-            if len(inst_overlays):
-                times = []
-                for o in inst_overlays:
-                    for c in o['contours']:
-                        times.append(c['time'])
 
-                self.mintime = min(times)
-                self.maxtime = max(times)
-                self.step = (self.maxtime*100 - self.mintime*100)/100000
+            #galLists = db.session.query(models.gw_galaxy_list).filter(
+            #    models.gw_galaxy_list.graceid == graceid,
+            #    models.gw_galaxy_list.alertid == self.selected_alert_info.id,
+            #).all()
+            #galList_ids = list(set([x.id for x in galLists]))
 
-            galLists = db.session.query(models.gw_galaxy_list).filter(
-                models.gw_galaxy_list.graceid == graceid,
-                models.gw_galaxy_list.alertid == self.selected_alert_info.id,
-            ).all()
-            galList_ids = list(set([x.id for x in galLists]))
+            #galEntries = db.session.query(
+            #    models.gw_galaxy_entry.name,
+            #    func.ST_AsText(models.gw_galaxy_entry.position).label('position'),
+            #    models.gw_galaxy_entry.score,
+            #    models.gw_galaxy_entry.info,
+            #    models.gw_galaxy_entry.listid,
+            #    models.gw_galaxy_entry.rank,
+            #).filter(
+            #    models.gw_galaxy_entry.listid.in_(galList_ids)
+            #).all()
 
-            galEntries = db.session.query(
-                models.gw_galaxy_entry.name,
-                func.ST_AsText(models.gw_galaxy_entry.position).label('position'),
-                models.gw_galaxy_entry.score,
-                models.gw_galaxy_entry.info,
-                models.gw_galaxy_entry.listid,
-                models.gw_galaxy_entry.rank,
-            ).filter(
-                models.gw_galaxy_entry.listid.in_(galList_ids)
-            ).all()
-
-            for glist in galLists:
-                markers = []
-                entries = [x for x in galEntries if x.listid == glist.id]
-                for e in entries:
-                    ra, dec = function.sanatize_pointing(e.position)
-                    markers.append({
-                        "name":e.name,
-                        "ra": ra,
-                        "dec": dec,
-                        "info":function.sanatize_gal_info(e, glist)
-                    })
-                galaxy_cats.append({
-                    "name":glist.groupname,
-                    "markers":markers
-                })
-
+            #for glist in galLists:
+            #    markers = []
+            #    entries = [x for x in galEntries if x.listid == glist.id]
+            #    for e in entries:
+            #        ra, dec = function.sanatize_pointing(e.position)
+            #        markers.append({
+            #            "name":e.name,
+            #            "ra": ra,
+            #            "dec": dec,
+            #            "info":function.sanatize_gal_info(e, glist)
+            #        })
+            #    galaxy_cats.append({
+            #        "name":glist.groupname,
+            #        "markers":markers
+            #    })
+            t_stop = time.time()
+            print("Time loading page: ", t_stop-t_start) 
         return self, detection_overlays, inst_overlays, GRBoverlays, galaxy_cats

@@ -9,6 +9,8 @@ import plotly
 import plotly.graph_objects as go
 import requests
 import urllib.parse
+import pandas as pd
+import flask_sqlalchemy as fsq
 
 from flask import Flask, request, jsonify
 from flask_login import current_user
@@ -26,11 +28,231 @@ from src import mail
 db = models.db
 
 #AJAX FUNCTIONS
+@app.route('/ajax_alertinstruments_footprints')
+def ajax_alertinstruments_footprints():
+	args = request.args
+	graceid = args.get('graceid')
+	graceid = models.gw_alert.graceidfromalternate(graceid)
+	pointing_status = args.get('pointing_status')
+	tos_mjd= float(args.get('tos_mjd'))
+	if pointing_status is None:
+		pointing_status = enums.pointing_status.completed
+
+	pointing_filter = []
+	pointing_filter.append(models.pointing_event.graceid == graceid)
+	pointing_filter.append(models.pointing_event.pointingid == models.pointing.id)
+	if pointing_status == 'pandc':
+		ors = []
+		ors.append(models.pointing.status == enums.pointing_status.completed)
+		ors.append(models.pointing.status == enums.pointing_status.planned)
+		pointing_filter.append(fsq.sqlalchemy.or_(*ors))
+	elif (pointing_status is not None and pointing_status != 'all' and pointing_status != ''):
+		pointing_filter.append(models.pointing.status == pointing_status)
+
+	pointing_info = db.session.query(
+		models.pointing.instrumentid,
+		models.pointing.pos_angle,
+		models.pointing.time,
+		func.ST_AsText(models.pointing.position).label('position'),
+		models.pointing.band,
+		models.pointing.depth,
+		models.pointing.depth_unit,
+		models.pointing.status
+	).filter(*pointing_filter).all()
+
+	instrumentids = [x.instrumentid for x in pointing_info]
+
+	instrumentinfo = db.session.query(
+		models.instrument.instrument_name,
+		models.instrument.nickname,
+		models.instrument.id
+	).filter(
+		models.instrument.id.in_(instrumentids)
+	).all()
+
+	footprintinfo = db.session.query(
+		func.ST_AsText(models.footprint_ccd.footprint).label('footprint'),
+		models.footprint_ccd.instrumentid
+	).filter(
+		models.footprint_ccd.instrumentid.in_(instrumentids)
+	).all()
+
+	inst_overlays = []
+	colorlist=['#ffe119', '#4363d8', '#f58231', '#42d4f4', '#f032e6', '#fabebe', '#469990', '#e6beff', '#9A6324', '#fffac8', '#800000', '#aaffc3', '#000075', '#a9a9a9']
+
+	for i,inst in enumerate([x for x in instrumentinfo if x.id != 49]):
+		name = inst.nickname if inst.nickname and inst.nickname != 'None' else inst.instrument_name
+		try:
+			color = colorlist[i]
+		except:
+			color = colors[inst.id]
+			pass
+		footprint_ccds = [x.footprint for x in footprintinfo if x.instrumentid == inst.id]
+		sanatized_ccds = function.sanatize_footprint_ccds(footprint_ccds)
+		inst_pointings = [x for x in pointing_info if x.instrumentid == inst.id]
+		pointing_geometries = []
+
+		for p in inst_pointings:
+			t = astropy.time.Time([p.time])
+			ra, dec = function.sanatize_pointing(p.position)
+			for ccd in sanatized_ccds:
+				pointing_footprint = function.project_footprint(ccd, ra, dec, p.pos_angle)
+				pointing_geometries.append({"polygon":pointing_footprint, "time":round(t.mjd[0]-tos_mjd, 2)})
+
+		inst_overlays.append({
+			"display":True,
+			"name":name,
+			"color":color,
+			"contours":pointing_geometries
+		})
+
+	return jsonify(inst_overlays)
+
+@app.route('/ajax_alerttype')
+def ajax_get_eventcontour():
+	args = request.args
+	#alertid = args['alertid']
+	urlid = args['urlid'].split('_')
+	alertid = urlid[0]
+	alertype= urlid[1]
+	if len(urlid) > 2:
+		alertype += urlid[2]
+	
+	alert = db.session.query(
+		models.gw_alert
+	).filter(
+		models.gw_alert.id == int(alertid)
+	).first()
+
+	if alert.far != 0:
+		farrate = 1/alert.far
+		farunit = "s"
+		if farrate > 86400:
+			farunit = "days"
+			farrate /= 86400
+			if farrate > 365:
+				farrate /= 365.25
+				farunit = "years"
+			elif farrate > 30:
+				farrate /= 30
+				farunit = "months"
+			elif farrate > 7:
+				farrate /= 7
+				farunit = "weeks"
+		print(farrate)
+		human_far=round(farrate,2)
+		print(human_far)
+		human_far_unit = farunit
+		humanfar = "once per {} {}".format(str(round(human_far, 2)),human_far_unit)
+	else:
+		humanfar = ""
+
+	if alert.distance is not None:
+		alert.distance = round(alert.distance,3)
+	else:
+		alert.distance = ""
+	if alert.distance_error is not None:
+		alert.distance_error = round(alert.distance_error, 3)
+	else:
+		alert.distance = ""
+
+	if alert.distance is not None and alert.distance_error is not None:
+		distanceperror = "{} +/- {}".format(round(alert.distance, 3), round(alert.distance_error, 3))
+	else:
+		print(alert.distance, alert.distance_error)
+		distanceperror = ''
+
+	detection_overlays = []
+	path_info = alert.graceid + '-' + alertype
+	contourpath = '/var/www/gwtm/src/static/'+path_info+'-contours-smooth.json'
+	print(contourpath)
+	if os.path.exists(contourpath):
+		contours_data=pd.read_json(contourpath)
+		contour_geometry = []
+		for contour in contours_data['features']:
+			contour_geometry.extend(contour['geometry']['coordinates'])
+
+		detection_overlays.append({
+			"display":True,
+			"name":"GW Contour",
+			"color": '#e6194B',
+			"contours":function.polygons2footprints(contour_geometry, 0)
+		})
+
+	print(distanceperror)
+	payload = {
+		'hidden_alertid':alertid,
+		'detection_overlays':detection_overlays,
+		'alert_group':alert.group,
+		'alert_detectors':alert.detectors,
+		'alert_time_of_signal':alert.time_of_signal,
+		'alert_timesent':alert.timesent,
+		'alert_human_far':humanfar,
+		'alert_distance_plus_error':distanceperror,
+		'alert_centralfreq':alert.centralfreq,
+		'alert_duration':alert.duration,
+		'alert_prob_bns':alert.prob_bns,
+		'alert_prob_nsbh':alert.prob_nsbh,
+		'alert_prob_gap':alert.prob_gap,
+		'alert_prob_bbh':alert.prob_bbh,
+		'alert_prob_terrestrial':alert.prob_terrestrial,
+		'alert_prob_hasns':alert.prob_hasns,
+		'alert_prob_hasremenant':alert.prob_hasremenant
+	}
+
+	return(jsonify(payload))
+
+
+@app.route('/ajax_event_galaxies')
+def ajax_event_galaxies():
+	args = request.args
+	alertid = args['alertid']
+	event_galaxies = []
+
+	galLists = db.session.query(models.gw_galaxy_list).filter(
+		models.gw_galaxy_list.alertid == alertid,
+	).all()
+	galList_ids = list(set([x.id for x in galLists]))
+
+	galEntries = db.session.query(
+		models.gw_galaxy_entry.name,
+		func.ST_AsText(models.gw_galaxy_entry.position).label('position'),
+		models.gw_galaxy_entry.score,
+		models.gw_galaxy_entry.info,
+		models.gw_galaxy_entry.listid,
+		models.gw_galaxy_entry.rank,
+	).filter(
+		models.gw_galaxy_entry.listid.in_(galList_ids)
+	).all()
+
+	for glist in galLists:
+		markers = []
+		entries = [x for x in galEntries if x.listid == glist.id]
+		for e in entries:
+			ra, dec = function.sanatize_pointing(e.position)
+			markers.append({
+				"name":e.name,
+				"ra": ra,
+				"dec": dec,
+				"info":function.sanatize_gal_info(e, glist)
+			})
+		event_galaxies.append({
+			"name":glist.groupname,
+			"markers":markers
+		})
+
+	return(jsonify(event_galaxies))
+
 
 @app.route('/ajax_scimma_xrt')
 def ajax_scimma_xrt():
 	args = request.args
 	graceid = args['graceid']
+	graceid = models.gw_alert.graceidfromalternate(graceid)
+
+	if 'S190426' in graceid:
+		graceid = 'S190426'
+
 	keywords = {
              'keyword':'',
              'cone_search':'',
@@ -56,7 +278,9 @@ def ajax_scimma_xrt():
 					'info':function.sanatize_XRT_source_info(p)
 				}
 			)
-	#print(payload)
+	else:
+		print('something went wrong')
+
 	return jsonify(payload)
 
 @app.route('/ajax_resend_verification_email')
@@ -114,7 +338,7 @@ def ajax_request_doi():
 	return jsonify('')
 
 
-@app.route("/coverage", methods=['GET','POST'])
+@app.route("/ajax_coverage_calculator", methods=['GET','POST'])
 def plot_prob_coverage():
 	graceid = models.gw_alert.graceidfromalternate(request.args.get('graceid'))
 	mappathinfo = request.args.get('mappathinfo')
@@ -250,7 +474,7 @@ def plot_prob_coverage():
 	return coverage_div
 
 
-@app.route('/preview_footprint', methods=['GET'])
+@app.route('/ajax_preview_footprint', methods=['GET'])
 def preview_footprint():
 	args = request.args
 
@@ -302,7 +526,7 @@ def preview_footprint():
 	return jsonify("")
 
 
-@app.route('/pointingfromid')
+@app.route('/ajax_pointingfromid')
 def get_pointing_fromID():
 	args = request.args
 	if 'id' in args and function.isInt(args.get('id')):

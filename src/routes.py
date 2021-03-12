@@ -185,7 +185,6 @@ def alert_select():
 	return render_template("alert_select.html", alerts=all_alerts)
 
 @app.route("/alerts", methods=['GET', 'POST'])
-#@login_required
 def alerts():
 	graceid = request.args.get('graceids')
 	status = request.args.get('pointing_status')
@@ -343,7 +342,6 @@ def manage_user():
 
 
 @app.route('/search_pointings', methods=['GET', 'POST'])
-#@login_required
 def search_pointings():
 	form = forms.SearchPointingsForm()
 	form.populate_graceids()
@@ -398,7 +396,6 @@ def search_pointings():
 
 
 @app.route('/search_instruments', methods=['GET', 'POST'])
-#@login_required
 def search_instruments():
 	form = forms.SearchInstrumentsForm()
 	if request.method == 'POST':
