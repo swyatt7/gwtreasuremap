@@ -50,6 +50,11 @@ div.constrained {
   height: 100px;
 }
 
+.scroll-section {
+  max-height: 100px;
+  overflow-y: auto;
+}
+
 </style>
 </head>
 
@@ -73,32 +78,52 @@ div.constrained {
 
   <div class='row'>
     <!-- The Aladin Viz -->
-    <div class='column'style="float:left; width: 80%;">
+    <div class='column'style="float:left; width: 75%;">
       <div id="aladin-lite-div" style="position: relative;"></div>
     </div>
     <!-- Viz interaction column -->
-    <div class="column" style="float: right; width: 20%; padding-left: 2%;">
+    <div class="column" style="float: right; width: 25%; padding-left: 2%;">
       <div class="row">
         <h3> Follow-Up </h3>
       </div>
+      <!-- Instrument block buttons and div -->
       <div class="row">
-        <button style="margin-left: auto; margin-right: 0;" type="button" class="btn btn-primary btn-sm" data-toggle='collapse' data-target='#alert_instruments_div'>+</button> <h4 id='instrumentsHeader' style="display: inline-block;">...Loading...</h4> 
-        <div class="collapse" id="alert_instruments_div"></div>
+        <button id='alert_inst_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll" data-toggle='collapse' data-target='#alert_instruments_div'>-</button> 
+        <button id='alert_hideshow_inst' onclick='hideShowAll(this.id)' type="button" class="btn btn-primary btn-sm">Hide</button>
+        <h4 style="display: inline-block;" id='instrumentsHeader'>...Loading...</h4> 
       </div>
       <div class="row">
-        <button type="button" class="btn btn-primary btn-sm" data-toggle='collapse' data-target='#alert_grbcov_div'>+</button> <h4 style="display: inline-block;">GRB Coverage</h4> 
-        <div class="collapse" id="alert_grbcov_div"></div>
+        <div class="collapse in scroll-section inst_coll" id="alert_instruments_div"></div>
+      </div>
+      <!-- GRB coverage block buttons and div -->
+      <div class="row">
+        <button id='alert_grb_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll" data-toggle='collapse' data-target='#alert_grbcov_div'>-</button>
+        <button id='alert_hideshow_grb' onclick='hideShowAll(this.id)' type="button" class="btn btn-primary btn-sm">Show</button>
+        <h4 style="display: inline-block;">GRB Coverage</h4> 
+      </div>
+      <div class="row">
+        <div class="collapse in grb_coll" id="alert_grbcov_div"></div>
       </div>
       <div class="row">
         <h3> Sources </h3>
       </div>
+      <!-- Galaxies block buttons and div -->
       <div class="row">
-        <button type="button" class="btn btn-primary btn-sm" data-toggle='collapse' data-target='#alert_gal_div'>+</button> <h4 style="display: inline-block;">Galaxies</h4> <button type="button" id="alert_event_galaxies" class="btn btn-primary btn-sm">Get</button>
-        <div class="collapse" id='alert_gal_div'></div>
+        <button id='alert_gal_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll" data-toggle='collapse' data-target='#alert_gal_div'>-</button> 
+        <button type="button" id="alert_event_galaxies" class="btn btn-primary btn-sm">Get</button>
+        <h4 style="display: inline-block;">Galaxies</h4> 
       </div>
       <div class="row">
-        <button type="button" class="btn btn-primary btn-sm" data-toggle='collapse' data-target='#alert_scimmadiv'>+</button> <h4 style="display: inline-block;">XRT Sources</h4> <button type="button" id="alert_scimma_xrt" class="btn btn-primary btn-sm">Get</button>
-        <div class="collapse" id ="alert_scimmadiv"></div>
+        <div class="collapse in" id='alert_gal_div'></div>
+      </div>
+      <!-- XRT sources block buttons and div -->
+      <div class="row">
+        <button id='alert_xrt_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll" data-toggle='collapse' data-target='#alert_scimmadiv'>-</button>
+        <button type="button" id="alert_scimma_xrt" class="btn btn-primary btn-sm">Get</button>
+        <h4 style="display: inline-block;">XRT Sources</h4> 
+      </div>
+      <div class="row">
+        <div class="collapse in" id ="alert_scimmadiv"></div>
       </div>
     </div>
     </div>
@@ -278,7 +303,7 @@ div.constrained {
 <script type='text/javascript'>
 
   var inst_overlays = {}
-  
+  var marker_list = {}
   var target_init = "{{ form.avgra }} {{ form.avgdec }}"
   var detection_overlays = JSON.parse('{{ detection_overlays | tojson }}');
   var GRBoverlays = JSON.parse('{{ GRBoverlays | tojson }}');
@@ -310,9 +335,12 @@ div.constrained {
   data.aladin = d.aladin
   var aladin = d.aladin
   var detectionoverlaylist = d.detectionoverlaylist
-  var instoverlaylist = {}
   var grboverlaylist = d.grboverlaylist
+  var instoverlaylist = {}
+  var set_aladin_markerlist = {} 
 
+  //This asynchronously queries for the instrument footprints
+  //Page load time saver.
   window.onload = function(){
     $('#instrumentsHeader').text('...Loading...')
     $.ajax(
@@ -332,20 +360,61 @@ div.constrained {
 </script>
 <!-- Page Interaction JS -->
 <script>
+
+  //twistyyyyy -> changes collapsible stuff
+  function changeCollapseButtonText(clicked_id){
+    var button = document.getElementById(clicked_id);
+    if (button.innerHTML == '+') { 
+      button.innerHTML = '-'
+    }
+    else {
+      button.innerHTML = '+'
+    }
+  }
+
+  //Toggles the instrument and GRB overlays
+  function hideShowAll(clicked_id) {
+    var button = document.getElementById(clicked_id);
+    toShow = (button.innerHTML == 'Show')
+    if (clicked_id == 'alert_hideshow_inst') {
+      aladin_overlayToggleAll(instoverlaylist, toShow)
+      $('.inst_coll input:checkbox').prop('checked', toShow)
+    }
+    if (clicked_id == 'alert_hideshow_grb') {
+      aladin_mocToggleAll(grboverlaylist, toShow)
+      $('.grb_coll input:checkbox').prop('checked', toShow)
+    }
+    if (toShow) { button.innerHTML = 'Hide'}
+    else { button.innerHTML = 'Show' }
+  }
+
+  //Listens to clicks in the respective <div>'s
+  //  the follow-ups remove clicked overlays
+  //  the sources interactively animate the vizualization to the source
   $(document).ready( function() {
     $('#alert_instruments_div').click(function(event) {
       if (event.target.id != '') { 
-        aladin_overlayToggle(event.target, instoverlaylist)
+        aladin_overlayToggleOne(event.target, instoverlaylist)
       }
     })
     $('#alert_grbcov_div').click(function(event) {
       if (event.target.id != '') {
-        aladin_mocToggle(event.target, grboverlaylist)
+        aladin_mocToggleOne(event.target, grboverlaylist)
+      }
+    })
+    $('#alert_gal_div').click(function(event) {
+      if (event.target.id != '') {
+        aladin_animateToMarker(event.target, marker_list['alert_gal'])
+      }
+    })
+    $('#alert_scimmadiv').click(function(event) {
+      if (event.target.id != '') {
+        aladin_animateToMarker(event.target, marker_list['alert_xrt'])
       }
     })
   });
 
-  //redraw with new contour
+  //redraw with new contour from the alert type tabs
   $(document).ready( function() {
     $('#alerttypenav').click(function(event) {
       var actives = document.getElementsByClassName('alerttypeactive')
@@ -378,8 +447,6 @@ div.constrained {
         $('#alert_prob_hasns').text(payload['alert_prob_hasns']);
         $('#alert_prob_hasremenant').text(payload['alert_prob_hasremenant']);
 
-        //aladin_removeContour(detectionoverlaylist);
-        //aladin.view.requestRedraw();
         aladin.removeLayers()
         data.detection_overlays = payload.detection_overlays;
         
@@ -388,7 +455,15 @@ div.constrained {
         detectionoverlaylist = d.detectionoverlaylist
         instoverlaylist = d.instoverlaylist
         grboverlaylist = d.grboverlaylist
-        //detectionoverlaylist = aladin_setContours(aladin, detection_overlays)
+
+        //This should be deleted once markers are encorporated into the gwtmAladinInit
+        $('#alert_gal_div').html('');
+        var button = document.getElementById('alert_event_galaxies');
+        button.innerHTML = 'Get'
+
+        $('#alert_scimmadiv').html('');
+        var button = document.getElementById('alert_scimma_xrt');
+        button.innerHTML = 'Get'
       })
     })
   })
@@ -424,75 +499,74 @@ div.constrained {
   //getting the alert event galaxies
   $(document).ready( function() {
     $('#alert_event_galaxies').click(function() {
-      var $btn = $(this).button('loading');
+      var button = document.getElementById('alert_event_galaxies');
       var alertid = document.getElementById('hidden_alertid').value;
-      $.ajax(
-        {
-            url: '/ajax_event_galaxies',
-            data: 'alertid='+alertid
-        }
-      ).done(function (event_galaxies) {
-        if (event_galaxies.length > 0) {
-          aladin_setMarkers(aladin, event_galaxies)
-          aladin_setMarkerHtml(event_galaxies, 'alert_gal_div')
-        } else {
-          var html = "<p>No Results</p>"
-          $('#alert_gal_div').html(html);
-        }
-        $btn.button('reset');
-      });
-    });
-  });
-  //disables/enables the XRT button
-  $(document).ready(function () {
-    $(document).ajaxStart(function () {
-      $('#alert_event_galaxies').addClass('disabled');
-    }).ajaxStop(function () {
-      $('#alert_event_galaxies').removeClass('disabled');
+      if (button.innerHTML == 'Get') {
+          $.ajax(
+          {
+              url: '/ajax_event_galaxies',
+              data: 'alertid='+alertid
+          }
+        ).done(function (event_galaxies) {
+          if (event_galaxies.length > 0) {
+            marker_list['alert_gal'] = event_galaxies
+            gal_markerlist = aladin_setMarkers(aladin, event_galaxies)
+            aladin_setMarkerHtml(event_galaxies, 'alert_gal_div')
+            button.innerHTML = 'Hide'
+            set_aladin_markerlist['alert_gal'] = gal_markerlist
+          } else {
+            var html = "<p>No Results</p>"
+            $('#alert_gal_div').html(html);
+          }
+        });
+      }
+      else if (button.innerHTML == 'Hide') {
+        toShow = button.innerHTML == 'Show'
+        aladin_markerToggleAll(set_aladin_markerlist['alert_gal'], toShow)
+        button.innerHTML = 'Show'
+      }
+      else if (button.innerHTML == 'Show') {
+        toShow = button.innerHTML == 'Show'
+        aladin_markerToggleAll(set_aladin_markerlist['alert_gal'], toShow)
+        button.innerHTML = 'Hide'
+      }
     });
   });
 
   //Function that calls the XRT sources and populates them 
-  // on the aladin viz
+  // on the aladin viz. Encorporates hide/show
   $(document).ready( function() {
     $('#alert_scimma_xrt').click(function() {
-      var $btn = $(this).button('loading');
-      $.ajax(
-        {
-            url: '/ajax_scimma_xrt',
-            data: 'graceid={{ form.graceid }}'
-        }
-      ).done(function (scimma_xrt_sources) {
-        if (scimma_xrt_sources.length > 0) {
-          var xrt_layer = A.catalog({name:'XRT Sources'});
-          for (i = 0; i < scimma_xrt_sources.length; i++) {
-                var marker = A.marker(
-                  scimma_xrt_sources[i].ra, 
-                  scimma_xrt_sources[i].dec, 
-                  {
-                    popupTitle: 'Source', 
-                    popupDesc: scimma_xrt_sources[i].info
-                  }
-                )
-                xrt_layer.addSources([marker])
+      var button = document.getElementById('alert_scimma_xrt');
+      if (button.innerHTML == 'Get') {
+          $.ajax(
+          {
+              url: '/ajax_scimma_xrt',
+              data: 'graceid={{ form.graceid }}'
           }
-          xrt_layer.hide
-          aladin.addCatalog(xrt_layer)
-        } else {
-          var html = '<p>No results</p>'
-          $('#alert_scimmadiv').html(html);
-        }
-        $btn.button('reset');
-      });
-    });
-  });
-
-  //disables/enables the XRT button
-  $(document).ready(function () {
-    $(document).ajaxStart(function () {
-      $('#alert_scimma_xrt').addClass('disabled');
-    }).ajaxStop(function () {
-      $('#alert_scimma_xrt').removeClass('disabled');
+        ).done(function (event_xrt_sources) {
+          if (event_xrt_sources.length > 0) {
+            marker_list['alert_xrt'] = event_xrt_sources
+            var xrt_markerlist = aladin_setMarkers(aladin, event_xrt_sources)
+            aladin_setMarkerHtml(event_xrt_sources, 'alert_scimmadiv')
+            button.innerHTML = 'Hide'
+            set_aladin_markerlist['alert_xrt'] = xrt_markerlist
+          } else {
+            var html = '<p>No results</p>'
+            $('#alert_scimmadiv').html(html);
+          }
+        });
+      }
+      else if (button.innerHTML == 'Hide') {
+        toShow = button.innerHTML == 'Show'
+        aladin_markerToggleAll(set_aladin_markerlist['alert_xrt'], toShow)
+        button.innerHTML = 'Show'
+      }
+      else if (button.innerHTML == 'Show') {
+        toShow = button.innerHTML == 'Show'
+        aladin_markerToggleAll(set_aladin_markerlist['alert_xrt'], toShow)
+        button.innerHTML = 'Hide'
+      }
     });
   });
 
@@ -513,6 +587,18 @@ div.constrained {
       instoverlaylist = d.instoverlaylist
       grboverlaylist = d.grboverlaylist
       $('#instrumentsHeader').text('Instruments')
+
+      var button = document.getElementById('alert_hideshow_inst')
+      button.innerHTML = 'Hide'
+
+      //This should be deleted once markers are encorporated into the gwtmAladinInit
+    $('#alert_gal_div').html('');
+      var button = document.getElementById('alert_event_galaxies');
+      button.innerHTML = 'Get'
+
+      $('#alert_scimmadiv').html('');
+      var button = document.getElementById('alert_scimma_xrt');
+      button.innerHTML = 'Get'
     });
   });
 </script>

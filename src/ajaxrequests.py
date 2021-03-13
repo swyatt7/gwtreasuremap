@@ -267,12 +267,14 @@ def ajax_scimma_xrt():
 	base = 'http://skip.dev.hop.scimma.org/api/alerts/'
 	url = '{}?{}'.format(base, urllib.parse.urlencode(keywords))
 	r = requests.get(url)
+	markers = []
 	payload = []
 	if r.status_code == 200:
 		package = json.loads(r.text)['results']
 		for p in package:
-			payload.append(
+			markers.append(
 				{
+					'name':p['alert_identifier'],
 					'ra':p['right_ascension'],
 					'dec':p['declination'],
 					'info':function.sanatize_XRT_source_info(p)
@@ -280,6 +282,12 @@ def ajax_scimma_xrt():
 			)
 	else:
 		print('something went wrong')
+
+	if len(markers):
+		payload.append({
+			'name':'SCIMMA XRT Sources',
+			'markers':markers
+		})
 
 	return jsonify(payload)
 

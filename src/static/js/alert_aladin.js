@@ -1,5 +1,21 @@
 /*
-Function to initialize the GWTM aladin interface
+    GWTM Aladin Visualization javascript controller
+
+    I am in no way a javascript master
+    This is entirely self-taught masochism that I do not wish
+        upon anyone.
+    Please do not try to implement this. 
+    If you do: please follow along with the static/templates/alert_info.html file
+    there is a lot of global variable manipulation going on here, not suggested.
+
+    It only functions by the grace of god and aderall.
+
+    -Samuel Wyatt 2021
+*/
+
+/*
+    Function to initialize the GWTM aladin interface
+    Needs to incorporate markers.
 */
 function gwtmAladinInit(data) {
     var fov = 180;
@@ -43,11 +59,16 @@ function gwtmAladinInit(data) {
     return ret;
 };
 
+/*
+    not sure if this works. Didn't delete
+*/
 $('input[name=survey]').change(function() {
     aladin.setImageSurvey($(this).val());
 });
 
-//sets an image into the initialized aladin instance
+/*
+    draws an image onto the aladin viz interface
+*/
 function aladin_setImage(
     aladin,
     imgsource,
@@ -62,8 +83,8 @@ function aladin_setImage(
 };
 
 /*
-draws a MOC map on the aladin interface
-returns the overlay list to memory so it can be remembered on event redraw
+    draws a MOC map on the aladin interface
+    returns the overlay list to memory so it can be remembered on event redraw
 */
 function aladin_setMOC(
     aladin,
@@ -79,6 +100,9 @@ function aladin_setMOC(
     return moc_overlayList
 }
 
+/*
+    function to draw contours on the aladin viz
+*/
 function aladin_setContours(
     aladin, 
     contour_list,
@@ -100,22 +124,36 @@ function aladin_setContours(
     return overlaylist
 }
 
+/*
+    function to draw markers on the aladin viz
+*/
 function aladin_setMarkers(
     aladin,
     marker_list
 ) {
+    set_marker_list = []
     for (i = 0; i < marker_list.length; i++) {
-    var groupname = marker_list[i].name
-    var gal_markers = marker_list[i].markers
-    var markerlayer = A.catalog({name:groupname})
-    for (j = 0; j < gal_markers.length; j++) {
-        var marker = A.marker(gal_markers[j].ra, gal_markers[j].dec, {popupTitle: gal_markers[j].name+"_gal", popupDesc: gal_markers[j].info})
-        markerlayer.addSources([marker])
+        var groupname = marker_list[i].name
+        var markers = marker_list[i].markers
+        var markerlayer = A.catalog({name:groupname})
+        for (j = 0; j < markers.length; j++) {
+            var marker = A.marker(markers[j].ra, markers[j].dec, {popupTitle: markers[j].name, popupDesc: markers[j].info})
+            markerlayer.addSources([marker])
+        }
+        aladin.addCatalog(markerlayer)
+
+        set_marker_list[i] = {
+            'name':groupname,
+            'markerlayer': markerlayer
+        }
     }
-    aladin.addCatalog(markerlayer)
-    }
+    return set_marker_list
 }
 
+/*
+    Function that redraws the instrument contours based on the pointing time
+    the slidervals come from the timeslider ui
+*/
 function aladin_sliderRedrawContours(
     aladin, 
     input_contour_list,
@@ -166,7 +204,7 @@ function aladin_removeContour(
 /*
     Hides or shows an overlay from the checkbox
 */
-function aladin_overlayToggle(
+function aladin_overlayToggleOne(
     target,
     overlay_list
 ) {
@@ -187,10 +225,34 @@ function aladin_overlayToggle(
     }
     aladin.view.requestRedraw();
 }
+
+/*
+    Toggles all contours on the aladin viz
+    toShow = True : show all
+    toShow = False: hide all
+*/
+function aladin_overlayToggleAll(
+    overlay_list, 
+    toShow
+) {
+    for(var k=0; k<overlay_list.length; k++)
+    {
+        overlay_list[k].toshow = toShow
+        if (toShow) {
+            overlay_list[k].contour.show()
+        }
+        else {
+            overlay_list[k].contour.hide()
+        }
+    }
+    aladin.view.requestRedraw();
+    return overlay_list
+  }
+
 /*
     Hides or shows the MOC from checkbox
 */
-function aladin_mocToggle(
+function aladin_mocToggleOne(
     target,
     moc_list
 ) {
@@ -211,68 +273,145 @@ function aladin_mocToggle(
 }
 
 /*
+    Toggles all MOC overlays on the aladin viz
+    toShow = True : show all
+    toShow = False: hide all
+*/
+function aladin_mocToggleAll(
+    moc_list,
+    toShow
+) {
+    for(var k=0; k<moc_list.length; k++)
+    {
+        if (toShow) {
+            moc_list[k].show()
+        }
+        else {
+            moc_list[k].hide()
+        }
+    }
+    aladin.view.requestRedraw()
+}
+
+/*
+    Toggles all markers on the aladin viz
+    toShow = True : show all
+    toShow = False: hide all
+*/
+function aladin_markerToggleAll(
+    marker_list,
+    toShow
+) {
+    for (var i = 0; i < marker_list.length; i++) {
+        markerlayer = marker_list[i].markerlayer
+        if (toShow) {
+            markerlayer.show() 
+        }
+        else { 
+            markerlayer.hide() 
+        }
+    }
+}
+
+/*
     Draws the html on the side of the aladin interface
     with the given html div-tid
 */
 function aladin_drawInstHTML(
     overlay_list,
     div_name,
-){
-    var overlayhtml = '<form id="InstrumentSelector">';
+) {
+    var overlayhtml = '<ul style="list-style-type:none;">'
     for (var k=0 ; k<overlay_list.length; k++) {
         var cat = overlay_list[k];
-        //overlayhtml += '<fieldset><span class="indicator right-triangle"></span><label for="' + cat.name + '">';
-        overlayhtml += '<fieldset><label for="' + cat.name + '">';
+        overlayhtml += '<li><fieldset><label for="' + cat.name + '">';
         overlayhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" checked="checked"  >' + cat.name + '</input></label>';
         overlayhtml += '<div class="cat-options" style="display: none;"><table><tr><td>Color</td><td><input type="color"></input></td></tr></select></td></tr></table></div>';
-        overlayhtml += '</fieldset>';
+        overlayhtml += '</fieldset></li>';
     }   
-    overlayhtml += '</form>';
+    overlayhtml += '</ul>';
     $('#'+div_name).html(overlayhtml)
 }
 
+/*
+    Draws the HTML for the GRB MOC list
+    includes a checkbox to toggle visibility
+*/
 function aladin_drawGRBHtml(
     grboverlay_list,
     div_name
-){
-    var GRBhtml = '<form id="GRBInstrumentSelector">';
+) {
+    var GRBhtml = '<ul style="list-style-type:none;">'
     for (var k=0 ; k<grboverlay_list.length; k++) {
         var cat = grboverlay_list[k];
         if (cat.name == 'Fermi in South Atlantic Anomaly'){
-            GRBhtml += '<fieldset><label for="' + cat.name + '">' + cat.name + '</label>';
-            GRBhtml += '</fieldset>';
+            GRBhtml += '<li><fieldset><label for="' + cat.name + '">' + cat.name + '</label>';
+            GRBhtml += '</fieldset></li>';
         } else {
-            GRBhtml += '<fieldset><label for="' + cat.name + '">';
+            GRBhtml += '<li><fieldset><label for="' + cat.name + '">';
             GRBhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" >' + cat.name + '</input></label>';
-            GRBhtml += '</fieldset>';
+            GRBhtml += '</fieldset></li>';
         }
     }
-    GRBhtml += '</form>';
+    GRBhtml += '</ul>'
     $('#'+div_name).html(GRBhtml);
 }
 
+/*
+    Draws the HTML for the Sources Marker list
+    includes a collapsible list for each collection of markers
+*/
 function aladin_setMarkerHtml(
     marker_list,
     marker_div,
 ) {
-    var html = ''
+    var html = '<ul style="list-style-type:none;">'
     for (i = 0; i < marker_list.length; i++) {
-    var groupname = marker_list[i].name
-    html += '<button type="button" class="btn btn-primary btn-xs" data-toggle="collapse" data-target="#'+groupname+'">+</button>';
-    html += '<p style="display: inline-block"> '+groupname+'</p>'
-    html += '<div class="collapse" id="'+groupname+'">'
-    var markers = marker_list[i].markers
-    for (j = 0; j < markers.length; j++) {
-        markername = markers[j].name
-        html += '<fieldset ><label for="' + markername+ '">';
-        html += '<input id="' + markername+ '" type="checkbox" value="' + markername + '" >' + markername + '</input></label>';
-        html += '</fieldset>';
-    } 
-    html += '</div>'
+        var groupname = marker_list[i].name
+        var idstr = groupname.replace(/\s+/g, '')
+        html += '<li>'
+        html += '<button id="collbtn'+idstr+'" onclick="changeCollapseButtonText(this.id)" type="button" class="btn btn-primary btn-xs" data-toggle="collapse" data-target="#'+idstr+'">+</button>';
+        html += '<p style="display: inline-block"> '+groupname+'</p>'
+        html += '<div class="collapse scroll-section" id="'+idstr+'">'
+        var markers = marker_list[i].markers
+        for (j = 0; j < markers.length; j++) {
+            markername = markers[j].name
+            html += '<fieldset ><label for="' + markername+ '">';
+            html += '<p id="' + markername+ '" type="text" value="' + markername + '" >' + markername + '</p></label>';
+            html += '</fieldset>';
+        } 
+        html += '</div>'
+        html += '</li>'
     }
+    html += '</ul>'
     $('#'+marker_div).html(html);
 }
 
+/*
+    When the user clicks on a source in the collapsible list
+    it will animate the aladin vizualization and move to that source
+*/
+function aladin_animateToMarker(
+    target, 
+    inputmakerlist
+) {
+    for (i = 0; i < inputmakerlist.length; i++) {
+      var gal_markers = inputmakerlist[i].markers
+      for (j = 0; j < gal_markers.length; j++) {
+        if (target.id == gal_markers[j].name) {
+          var ra = gal_markers[j].ra;
+          var dec = gal_markers[j].dec;
+          aladin.zoomToFoV(3,3)
+          aladin.animateToRaDec(ra, dec, 3);
+        }
+      }
+    }
+}
+
+/*
+    Changes the color of an instrument overlay
+    Doesn't work right now
+*/
 $('.indicator').click(function() {
     var $this = $(this);
     if ($this.hasClass('right-triangle')) {
@@ -300,6 +439,7 @@ $('.indicator').click(function() {
     Function that listens to the time slider. 
     clears the visualization and redraws the contours
     considers the time of the instrument pointings 
+    will not redraw markers... YET
 */
 $(function() {
     $( "#slider-range" ).slider({
@@ -323,6 +463,15 @@ $(function() {
             detectionoverlaylist = aladin_setContours(aladin, data.detection_overlays)
             grboverlaylist = aladin_setMOC(aladin, data.GRBoverlays)
             instoverlaylist = aladin_sliderRedrawContours(aladin, data.inst_overlays, instoverlaylist, slidervals)
+
+            //place holder fix for Sources. 
+            $('#alert_gal_div').html('');
+            var button = document.getElementById('alert_event_galaxies');
+            button.innerHTML = 'Get'
+
+            $('#alert_scimmadiv').html('');
+            var button = document.getElementById('alert_scimma_xrt');
+            button.innerHTML = 'Get'
         }
   });
   $( "#amount" ).val( (new Number($( "#slider-range" ).slider( "values", 0 ))) +
