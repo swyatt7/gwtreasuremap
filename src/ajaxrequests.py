@@ -95,9 +95,13 @@ def ajax_alertinstruments_footprints():
 		for p in inst_pointings:
 			t = astropy.time.Time([p.time])
 			ra, dec = function.sanatize_pointing(p.position)
+			
 			for ccd in sanatized_ccds:
 				pointing_footprint = function.project_footprint(ccd, ra, dec, p.pos_angle)
-				pointing_geometries.append({"polygon":pointing_footprint, "time":round(t.mjd[0]-tos_mjd, 2)})
+				pointing_geometries.append({
+					"polygon":pointing_footprint, 
+					"time":round(t.mjd[0]-tos_mjd, 3)
+				})
 
 		inst_overlays.append({
 			"display":True,
