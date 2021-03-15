@@ -387,7 +387,7 @@ class AlertsForm(FlaskForm):
             if self.selected_alert_info.time_of_signal:
                 tos = self.selected_alert_info.time_of_signal
                 t = astropy.time.Time([tos])
-                self.tos_mjd = round(t.mjd[0], 2)
+                self.tos_mjd = round(t.mjd[0], 3)
             else:
                 self.tos_mjd = 0
 
@@ -395,7 +395,7 @@ class AlertsForm(FlaskForm):
                 times = []
                 for p in pointing_info:
                     t = astropy.time.Time([p.time])
-                    times.append(round(t.mjd[0]-self.tos_mjd, 2))
+                    times.append(round(t.mjd[0]-self.tos_mjd, 3))
 
                 self.mintime = min(times)
                 self.maxtime = max(times)

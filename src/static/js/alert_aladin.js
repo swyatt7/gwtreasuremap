@@ -324,10 +324,11 @@ function aladin_drawInstHTML(
     var overlayhtml = '<ul style="list-style-type:none;">'
     for (var k=0 ; k<overlay_list.length; k++) {
         var cat = overlay_list[k];
-        overlayhtml += '<li><fieldset><label for="' + cat.name + '">';
-        overlayhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" checked="checked"  >' + cat.name + '</input></label>';
-        overlayhtml += '<div class="cat-options" style="display: none;"><table><tr><td>Color</td><td><input type="color"></input></td></tr></select></td></tr></table></div>';
-        overlayhtml += '</fieldset></li>';
+        overlayhtml += '<li><div>';
+        overlayhtml += '<fieldset><label for="' + cat.name + '" style="display: inline-block;">';
+        overlayhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" checked="checked" style="display: inline-block;">' + cat.name + ' </input>';
+        overlayhtml += '<div class="overlaycolorbox" style="background-color: '+cat.color+';"> </div></label>';
+        overlayhtml += '</fieldset></div></li>';
     }   
     overlayhtml += '</ul>';
     $('#'+div_name).html(overlayhtml)
@@ -348,9 +349,10 @@ function aladin_drawGRBHtml(
             GRBhtml += '<li><fieldset><label for="' + cat.name + '">' + cat.name + '</label>';
             GRBhtml += '</fieldset></li>';
         } else {
-            GRBhtml += '<li><fieldset><label for="' + cat.name + '">';
-            GRBhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" >' + cat.name + '</input></label>';
-            GRBhtml += '</fieldset></li>';
+            GRBhtml += '<li><div><fieldset><label for="' + cat.name + '" style="display: inline-block;">';
+            GRBhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" style="display: inline-block;">' + cat.name + ' </input>';
+            GRBhtml += '<div class="overlaycolorbox" style="background-color: '+cat.color+';"> </div></label>'
+            GRBhtml += '</fieldset></div></li>';
         }
     }
     GRBhtml += '</ul>'
@@ -370,7 +372,7 @@ function aladin_setMarkerHtml(
         var groupname = marker_list[i].name
         var idstr = groupname.replace(/\s+/g, '')
         html += '<li>'
-        html += '<button id="collbtn'+idstr+'" onclick="changeCollapseButtonText(this.id)" type="button" class="btn btn-primary btn-xs" data-toggle="collapse" data-target="#'+idstr+'">+</button>';
+        html += '<button id="collbtn'+idstr+'" onclick="changeCollapseButtonText(this.id)" type="button" class="btn btn-primary btn-xs right-triangle" data-toggle="collapse" data-target="#'+idstr+'"></button>';
         html += '<p style="display: inline-block"> '+groupname+'</p>'
         html += '<div class="collapse scroll-section" id="'+idstr+'">'
         var markers = marker_list[i].markers
@@ -460,9 +462,10 @@ $(function() {
             
             aladin_setImage(aladin, 'static/sun-logo-100.png', 'Sun at GW T0', data.sun_ra, data.sun_dec)
             aladin_setImage(aladin, 'static/moon-supersmall.png', 'Moon at GW T0', data.moon_ra, data.moon_dec)
-            detectionoverlaylist = aladin_setContours(aladin, data.detection_overlays)
+            
             grboverlaylist = aladin_setMOC(aladin, data.GRBoverlays)
             instoverlaylist = aladin_sliderRedrawContours(aladin, data.inst_overlays, instoverlaylist, slidervals)
+            detectionoverlaylist = aladin_setContours(aladin, data.detection_overlays)
 
             //place holder fix for Sources. 
             $('#alert_gal_div').html('');

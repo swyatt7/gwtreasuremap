@@ -38,11 +38,15 @@
 }
 
 .alerttypeactive {
-  cursor: pointer;
+  cursor: auto;
   color: black;
   background-color:darkgray;
   outline: darkgray;
   border: darkgray;
+}
+
+.alerttypeinactive {
+  cursor: pointer;
 }
 
 div.constrained {
@@ -53,6 +57,13 @@ div.constrained {
 .scroll-section {
   max-height: 100px;
   overflow-y: auto;
+}
+
+.overlaycolorbox {
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+  background-color: white;
 }
 
 </style>
@@ -71,7 +82,7 @@ div.constrained {
         <!-- <li class="active"><a href="/{{ form.page }}?graceids={{ form.graceid }}&pointing_status={{ form.status }}&alert_type={{ al['type'] }}">{{ al['type'] }} <br> {{al['timesent']}}</a></li>-->
         <li class="nav-item"><a class="alerttypeactive" id="{{ al['urlid']}}">{{ al['type'] }}<br>{{al['timesent']}}</a></li>
       {% else %}
-        <li class="nav-item"><a id="{{ al['urlid']}}">{{ al['type'] }}<br>{{al['timesent']}}</a></li>
+        <li class="nav-item"><a class="alerttypeinactive" id="{{ al['urlid']}}">{{ al['type'] }}<br>{{al['timesent']}}</a></li>
       {% endif %}
     {% endfor %}
   </ul>
@@ -88,7 +99,7 @@ div.constrained {
       </div>
       <!-- Instrument block buttons and div -->
       <div class="row">
-        <button id='alert_inst_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll" data-toggle='collapse' data-target='#alert_instruments_div'>-</button> 
+        <button id='alert_inst_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll down-triangle" data-toggle='collapse' data-target='#alert_instruments_div'></button> 
         <button id='alert_hideshow_inst' onclick='hideShowAll(this.id)' type="button" class="btn btn-primary btn-sm">Hide</button>
         <h4 style="display: inline-block;" id='instrumentsHeader'>...Loading...</h4> 
       </div>
@@ -97,7 +108,7 @@ div.constrained {
       </div>
       <!-- GRB coverage block buttons and div -->
       <div class="row">
-        <button id='alert_grb_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll" data-toggle='collapse' data-target='#alert_grbcov_div'>-</button>
+        <button id='alert_grb_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll down-triangle" data-toggle='collapse' data-target='#alert_grbcov_div'></button>
         <button id='alert_hideshow_grb' onclick='hideShowAll(this.id)' type="button" class="btn btn-primary btn-sm">Show</button>
         <h4 style="display: inline-block;">GRB Coverage</h4> 
       </div>
@@ -109,7 +120,7 @@ div.constrained {
       </div>
       <!-- Galaxies block buttons and div -->
       <div class="row">
-        <button id='alert_gal_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll" data-toggle='collapse' data-target='#alert_gal_div'>-</button> 
+        <button id='alert_gal_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll down-triangle" data-toggle='collapse' data-target='#alert_gal_div'></button> 
         <button type="button" id="alert_event_galaxies" class="btn btn-primary btn-sm">Get</button>
         <h4 style="display: inline-block;">Galaxies</h4> 
       </div>
@@ -118,7 +129,7 @@ div.constrained {
       </div>
       <!-- XRT sources block buttons and div -->
       <div class="row">
-        <button id='alert_xrt_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll" data-toggle='collapse' data-target='#alert_scimmadiv'>-</button>
+        <button id='alert_xrt_coll' onclick='changeCollapseButtonText(this.id)' type="button" class="btn btn-primary btn-sm alert_coll down-triangle" data-toggle='collapse' data-target='#alert_scimmadiv'></button>
         <button type="button" id="alert_scimma_xrt" class="btn btn-primary btn-sm">Get</button>
         <h4 style="display: inline-block;">XRT Sources</h4> 
       </div>
@@ -364,11 +375,12 @@ div.constrained {
   //twistyyyyy -> changes collapsible stuff
   function changeCollapseButtonText(clicked_id){
     var button = document.getElementById(clicked_id);
-    if (button.innerHTML == '+') { 
-      button.innerHTML = '-'
+
+    if (button.classList.contains('right-triangle')) { 
+      button.classList.replace('right-triangle', 'down-triangle')
     }
     else {
-      button.innerHTML = '+'
+      button.classList.replace('down-triangle', 'right-triangle')
     }
   }
 
@@ -417,54 +429,57 @@ div.constrained {
   //redraw with new contour from the alert type tabs
   $(document).ready( function() {
     $('#alerttypenav').click(function(event) {
-      var actives = document.getElementsByClassName('alerttypeactive')
-      var thisEl = document.getElementById(event.target.id)
-      for(i = 0; i<actives.length; i++){
-        actives[i].classList.remove('alerttypeactive')
-      }
-      thisEl.classList.add('alerttypeactive')
 
-      $.ajax(
-        {
-          url: '/ajax_alerttype',
-          data: 'urlid='+thisEl.id
+      if (event.target.id != 'alerttypenav') {
+        var actives = document.getElementsByClassName('alerttypeactive')
+        var thisEl = document.getElementById(event.target.id)
+        for(i = 0; i<actives.length; i++){
+          actives[i].classList.replace('alerttypeactive', 'alerttypeinactive')
         }
-      ).done(function (payload){
-        $('#hidden_alertid').val(payload['hidden_alertid']);
-        $('#alert_group').text(payload['alert_group']);
-        $('#alert_detectors').text(payload['alert_detectors']);
-        $('#alert_time_of_signal').text(payload['alert_time_of_signal']);
-        $('#alert_timesent').text(payload['alert_timesent']);
-        $('#alert_human_far').text(payload['alert_human_far']);
-        $('#alert_distance_plus_error').text(payload['alert_distance_plus_error']);
-        $('#alert_centralfreq').text(payload['alert_centralfreq']);
-        $('#alert_duration').text(payload['alert_duration']);
-        $('#alert_prob_bns').text(payload['alert_prob_bns']);
-        $('#alert_prob_nsbh').text(payload['alert_prob_nsbh']);
-        $('#alert_prob_gap').text(payload['alert_prob_gap']);
-        $('#alert_prob_bbh').text(payload['alert_prob_bbh']);
-        $('#alert_prob_terrestrial').text(payload['alert_prob_terrestrial']);
-        $('#alert_prob_hasns').text(payload['alert_prob_hasns']);
-        $('#alert_prob_hasremenant').text(payload['alert_prob_hasremenant']);
+        thisEl.classList.add('alerttypeactive')
 
-        aladin.removeLayers()
-        data.detection_overlays = payload.detection_overlays;
-        
-        d = gwtmAladinInit(data)
-        aladin = d.aladin
-        detectionoverlaylist = d.detectionoverlaylist
-        instoverlaylist = d.instoverlaylist
-        grboverlaylist = d.grboverlaylist
+        $.ajax(
+          {
+            url: '/ajax_alerttype',
+            data: 'urlid='+thisEl.id
+          }
+        ).done(function (payload){
+          $('#hidden_alertid').val(payload['hidden_alertid']);
+          $('#alert_group').text(payload['alert_group']);
+          $('#alert_detectors').text(payload['alert_detectors']);
+          $('#alert_time_of_signal').text(payload['alert_time_of_signal']);
+          $('#alert_timesent').text(payload['alert_timesent']);
+          $('#alert_human_far').text(payload['alert_human_far']);
+          $('#alert_distance_plus_error').text(payload['alert_distance_plus_error']);
+          $('#alert_centralfreq').text(payload['alert_centralfreq']);
+          $('#alert_duration').text(payload['alert_duration']);
+          $('#alert_prob_bns').text(payload['alert_prob_bns']);
+          $('#alert_prob_nsbh').text(payload['alert_prob_nsbh']);
+          $('#alert_prob_gap').text(payload['alert_prob_gap']);
+          $('#alert_prob_bbh').text(payload['alert_prob_bbh']);
+          $('#alert_prob_terrestrial').text(payload['alert_prob_terrestrial']);
+          $('#alert_prob_hasns').text(payload['alert_prob_hasns']);
+          $('#alert_prob_hasremenant').text(payload['alert_prob_hasremenant']);
 
-        //This should be deleted once markers are encorporated into the gwtmAladinInit
-        $('#alert_gal_div').html('');
-        var button = document.getElementById('alert_event_galaxies');
-        button.innerHTML = 'Get'
+          aladin.removeLayers()
+          data.detection_overlays = payload.detection_overlays;
+          
+          d = gwtmAladinInit(data)
+          aladin = d.aladin
+          detectionoverlaylist = d.detectionoverlaylist
+          instoverlaylist = d.instoverlaylist
+          grboverlaylist = d.grboverlaylist
 
-        $('#alert_scimmadiv').html('');
-        var button = document.getElementById('alert_scimma_xrt');
-        button.innerHTML = 'Get'
-      })
+          //This should be deleted once markers are encorporated into the gwtmAladinInit
+          $('#alert_gal_div').html('');
+          var button = document.getElementById('alert_event_galaxies');
+          button.innerHTML = 'Get'
+
+          $('#alert_scimmadiv').html('');
+          var button = document.getElementById('alert_scimma_xrt');
+          button.innerHTML = 'Get'
+        })
+      }
     })
   })
 
