@@ -47,7 +47,7 @@ function gwtmAladinInit(data) {
     var grboverlaylist = aladin_setMOC(aladin, data.GRBoverlays)
 
     aladin_drawInstHTML(data.inst_overlays, 'alert_instruments_div')
-    aladin_drawGRBHtml(data.GRBoverlays, 'alert_grbcov_div')
+    aladin_drawGRBHTML(data.GRBoverlays, 'alert_grbcov_div')
 
     var ret = {
         aladin: aladin,
@@ -326,8 +326,10 @@ function aladin_drawInstHTML(
         var cat = overlay_list[k];
         overlayhtml += '<li><div>';
         overlayhtml += '<fieldset><label for="' + cat.name + '" style="display: inline-block;">';
-        overlayhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" checked="checked" style="display: inline-block;">' + cat.name + ' </input>';
-        overlayhtml += '<div class="overlaycolorbox" style="background-color: '+cat.color+';"> </div></label>';
+        overlayhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" checked="checked" style="display: inline-block;">';// + cat.name + ' </input>';
+        overlayhtml += '<div class="overlaycolorbox" style="background-color: '+cat.color+';"></div><span>'+cat.name+'</span></input></label>';
+        //overlayhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" checked="checked">';
+        //overlayhtml += '<div class="overlaycolorbox" style="background-color: '+cat.color+';"></div><span>' + cat.name + '</span></input></label>';
         overlayhtml += '</fieldset></div></li>';
     }   
     overlayhtml += '</ul>';
@@ -338,7 +340,7 @@ function aladin_drawInstHTML(
     Draws the HTML for the GRB MOC list
     includes a checkbox to toggle visibility
 */
-function aladin_drawGRBHtml(
+function aladin_drawGRBHTML(
     grboverlay_list,
     div_name
 ) {
@@ -350,8 +352,10 @@ function aladin_drawGRBHtml(
             GRBhtml += '</fieldset></li>';
         } else {
             GRBhtml += '<li><div><fieldset><label for="' + cat.name + '" style="display: inline-block;">';
-            GRBhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" style="display: inline-block;">' + cat.name + ' </input>';
-            GRBhtml += '<div class="overlaycolorbox" style="background-color: '+cat.color+';"> </div></label>'
+            GRBhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" style="display: inline-block;">';// + cat.name + ' </input>';
+            GRBhtml += '<div class="overlaycolorbox" style="background-color: '+cat.color+';"></div><span>'+cat.name+'</span></input></label>';
+            //GRBhtml += '<input id="' + cat.name + '" type="checkbox" value="' + cat.name + '" style="display: inline-block;">';
+            //GRBhtml += '<div class="overlaycolorbox" style="background-color: '+cat.color+';"></div><span>' + cat.name + '</span></input></label>'
             GRBhtml += '</fieldset></div></li>';
         }
     }
